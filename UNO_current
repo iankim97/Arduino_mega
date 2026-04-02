@@ -1,0 +1,62 @@
+/*
+ * ACS758LCB-050B 전류 측정 및 경과 시간 표시 코드
+ */
+
+const int sensorPin = A0;
+const float sensitivity = 40.0;
+const int samples = 50;
+
+float vcc = 5.0;
+float offsetVoltage = 2.5;
+
+void setup() {
+  Serial.begin(115200);
+  
+  // 초기 영점 조정
+  Serial.println("Calibrating sensor...");
+  long runningSum = 0;
+  for (int i = 0; i < 100; i++) {
+    runningSum += analogRead(sensorPin);
+    delay(10);
+  }
+  offsetVoltage = (runningSum / 100.0) * (vcc / 1024.0);
+  
+  Serial.println("System Start!");
+}
+
+void loop() {
+  // 1. 경과 시간 계산 (HH:MM:SS 형식)
+unsigned long totalSeconds = millis() / 1000;
+  int hours = totalSeconds / 3600;
+  int minutes = (totalSeconds % 3600) / 60;
+  int seconds = totalSeconds % 60;
+
+  // sprintf 대신 Serial.print로 끊어서 출력 (컴파일이 훨씬 가벼움)
+  if(hours < 10) Serial.print('0');
+  Serial.print(hours);
+  Serial.print(':');
+  if(minutes < 10) Serial.print('0');
+  Serial.print(minutes);
+  Serial.print(':');
+  if(seconds < 10) Serial.print('0');
+  Serial.print(seconds);
+  Serial.print(" sec | ");
+
+  // 3. 전류 측정 로직
+  long sensorSum = 0;
+  for (int i = 0; i < samples; i++) {
+    sensorSum += analogRead(sensorPin);
+  }
+  float avgADC = (float)sensorSum / samples;
+  float voltage = avgADC * (vcc / 1024.0);
+  float current = (voltage - offsetVoltage) / (sensitivity / 1000.0);
+
+  // 4. 결과 출력
+  Serial.print("Voltage: ");
+  Serial.print(voltage, 3);
+  Serial.print(" V | Current: ");
+  Serial.print(current, 2);
+  Serial.println(" A");
+
+  delay(1000); // 1초 간격으로 업데이트
+}
