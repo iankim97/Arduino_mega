@@ -1,0 +1,52 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// LCD 주소가 0x27인지 0x3F인지 확인이 필요합니다. (화면이 안 나오면 0x3F로 변경)
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
+
+void setup() {
+  // 1. 통신 포트 초기화
+  Serial.begin(115200);   // PC 디버깅용
+  Serial1.begin(9600);    // RXTX#2 전송용 (상대 장치 속도에 맞춤)
+  Serial2.begin(9600);    // 바코드 리더기 입력용 (검증된 9600 속도)
+  
+  // 2. LCD 초기화
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("SYSTEM READY");
+  
+  Serial.println("--- BARCODE BRIDGE ONLINE ---");
+}
+
+void loop() {
+  // 바코드 리더기(Serial2)로부터 데이터가 들어오면
+  if (Serial2.available()) {
+    delay(100); // 데이터가 끝까지 들어올 수 있게 잠시 대기
+    String barcode = Serial2.readStringUntil('\n'); 
+    barcode.trim(); // 앞뒤 공백 및 줄바꿈 제거
+
+    if (barcode.length() > 0) {
+      // [1] PC 시리얼 모니터에 출력 (확인용)
+      Serial.print("Scanned: ");
+      Serial.println(barcode);
+      
+      // [2] LCD 화면에 출력
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Digital Scan:");
+      lcd.setCursor(0, 1);
+      lcd.print(barcode); 
+      
+      // [3] RXTX#2(Serial1)로 데이터 전달
+      Serial1.println(barcode); 
+      Serial.println("Forwarded to RXTX#2");
+      
+      // 3초 후 화면 초기화 (선택 사항)
+      delay(3000);
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Ready to Scan...");
+    }
+  }
+}
