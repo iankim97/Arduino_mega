@@ -1,0 +1,61 @@
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
+
+// PCA9685 기본 I2C 주소는 0x40입니다.
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
+
+// [계산] 드라이버 910mA일 때 700mA로 제한하기 위한 PWM 값
+// 4095 * (700 / 910) = 약 3150
+const int MAX_PWM_LIMIT = 3150; 
+const int TOTAL_CHANNELS = 16;
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("16 Channel LED Control System Starting...");
+
+  pwm.begin();
+  
+  // LED 제어 시 플리커 방지를 위해 주파수를 1000Hz로 설정
+  pwm.setPWMFreq(1000); 
+
+  // 초기화: 모든 채널 끄기
+  for (int i = 0; i < TOTAL_CHANNELS; i++) {
+    pwm.setPWM(i, 0, 0);
+  }
+}
+
+void loop() {
+  // 예제 1: 0번부터 15번까지 순차적으로 밝아졌다가 어두워지기
+  for (int ch = 0; ch < TOTAL_CHANNELS; ch++) {
+    Serial.print("Controlling Channel: ");
+    Serial.println(ch);
+
+    // 밝아지기 (0 -> 700mA 제한값)
+    for (int brightness = 0; brightness <= MAX_PWM_LIMIT; brightness += 50) {
+      pwm.setPWM(ch, 0, brightness);
+      delay(5);
+    }
+
+    // 어두워지기 (700mA 제한값 -> 0)
+    for (int brightness = MAX_PWM_LIMIT; brightness >= 0; brightness -= 50) {
+      pwm.setPWM(ch, 0, brightness);
+      delay(5);
+    }
+    
+    delay(100); // 채널 간 간격
+  }
+}
+
+/**
+ * 특정 채널의 밝기를 퍼센트(0~100%)로 제어하고 싶을 때 사용하는 함수
+ * @param channel: 0 ~ 15
+ * @param percent: 0 ~ 100
+ */
+void setLedBrightness(uint8_t channel, int percent) {
+  if (percent > 100) percent = 100;
+  if (percent < 0) percent = 0;
+
+  // 100% 입력 시 MAX_PWM_LIMIT(3150)이 출력되도록 매핑
+  int pwmValue = map(percent, 0, 100, 0, MAX_PWM_LIMIT);
+  pwm.setPWM(channel, 0, pwmValue);
+}
