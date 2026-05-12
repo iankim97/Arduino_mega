@@ -1,1 +1,80 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
+// 1. LCD 설정 (주소 0x27)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// 2. 핀 정의 (FA-DUINO 단자 기준)
+const int PIN_P_CDS = 6;    // AD 6번 단자 (P측 센서)
+const int PIN_N_CDS = 7;    // AD 7번 단자 (N측 센서)
+const int OUT_P_RELAY = 38; // NPN TR 출력 38번 (P측 릴레이)
+const int OUT_N_RELAY = 39; // NPN TR 출력 39번 (N측 릴레이)
+
+// 3. ★ 기준 전압을 상수로 설정 (0.25V) ★
+const float REF_VOLT = 0.25; 
+
+// ADC 값을 전압으로 변환하는 함수 (5V 기준)
+float calculateVolt(int adcValue) {
+  return (adcValue * 5.0) / 1023.0;
+}
+
+void setup() {
+  Serial.begin(9600);
+  
+  // LCD 초기화
+  lcd.init();
+  lcd.backlight();
+  
+  // 출력 핀 설정
+  pinMode(OUT_P_RELAY, OUTPUT);
+  pinMode(OUT_N_RELAY, OUTPUT);
+  
+  lcd.setCursor(0, 0);
+  lcd.print("FA-DUINO READY");
+  lcd.setCursor(0, 1);
+  lcd.print("REF: 0.25V");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  // 1. 센서 전압 읽기 (AD 6, 7번)
+  int pAdc = analogRead(PIN_P_CDS);
+  int nAdc = analogRead(PIN_N_CDS);
+  
+  float pCdsVolt = calculateVolt(pAdc);
+  float nCdsVolt = calculateVolt(nAdc);
+
+  // 2. 비교 및 출력 제어 (비교 로직)
+  // 측정값이 0.25V보다 크면(어두워지면) 출력 ON
+  if (pCdsVolt > REF_VOLT) {
+    digitalWrite(OUT_P_RELAY, HIGH);
+  } else {
+    digitalWrite(OUT_P_RELAY, LOW);
+  }
+  
+  if (nCdsVolt > REF_VOLT) {
+    digitalWrite(OUT_N_RELAY, HIGH);
+  } else {
+    digitalWrite(OUT_N_RELAY, LOW);
+  }
+
+  // 3. LCD 표시
+  // 첫 번째 줄: 현재 센서 측정 전압
+  lcd.setCursor(0, 0);
+  lcd.print("P:"); lcd.print(pCdsVolt, 2); lcd.print("V "); // 소수점 2자리까지
+  lcd.print("N:"); lcd.print(nCdsVolt, 2); lcd.print("V  ");
+
+  // 두 번째 줄: 설정된 기준 상수값 표시
+  lcd.setCursor(0, 1);
+  lcd.print("SET REF: ");
+  lcd.print(REF_VOLT, 2);
+  lcd.print("V");
+
+  // 시리얼 모니터 확인용
+  Serial.print("P:"); Serial.print(pCdsVolt, 2);
+  Serial.print("V | N:"); Serial.print(nCdsVolt, 2);
+  Serial.print("V | REF:"); Serial.println(REF_VOLT);
+
+  delay(300); 
+}
