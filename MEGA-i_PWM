@@ -1,61 +1,37 @@
-#include <Wire.h>
+include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
-// PCA9685 기본 I2C 주소는 0x40입니다.
+// PCA9685 객체 생성
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
-// [계산] 드라이버 910mA일 때 700mA로 제한하기 위한 PWM 값
-// 4095 * (700 / 910) = 약 3150
-const int MAX_PWM_LIMIT = 3150; 
-const int TOTAL_CHANNELS = 16;
+// [설정 변수] 여기에 0, 25, 50, 75, 90 중 원하는 숫자를 넣으세요.
+int targetPercent = 50; 
+
+// 드라이버 910mA 기준 700mA 제한값 (약 77%)
+const int MAX_SAFE_VALUE = 3150; 
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("16 Channel LED Control System Starting...");
+  Serial.println("PCA9685 Scope Test Mode");
 
   pwm.begin();
-  
-  // LED 제어 시 플리커 방지를 위해 주파수를 1000Hz로 설정
-  pwm.setPWMFreq(1000); 
+  pwm.setPWMFreq(1000); // 스코프에서 관측하기 좋은 1kHz 설정
 
-  // 초기화: 모든 채널 끄기
-  for (int i = 0; i < TOTAL_CHANNELS; i++) {
-    pwm.setPWM(i, 0, 0);
-  }
+  // 초기화: 모든 채널 끔
+  for(int i=0; i<16; i++) pwm.setPWM(i, 0, 0);
 }
 
 void loop() {
-  // 예제 1: 0번부터 15번까지 순차적으로 밝아졌다가 어두워지기
-  for (int ch = 0; ch < TOTAL_CHANNELS; ch++) {
-    Serial.print("Controlling Channel: ");
-    Serial.println(ch);
+  // 입력된 퍼센트를 PWM 값으로 변환 (0~100% -> 0~3150)
+  // 만약 700mA 제한 없이 910mA 풀 출력을 보고 싶다면 3150 대신 4095 사용
+  int pwmValue = map(targetPercent, 0, 100, 0, MAX_SAFE_VALUE);
 
-    // 밝아지기 (0 -> 700mA 제한값)
-    for (int brightness = 0; brightness <= MAX_PWM_LIMIT; brightness += 50) {
-      pwm.setPWM(ch, 0, brightness);
-      delay(5);
-    }
+  // 0번 포트(첫 번째 채널)로 출력
+  pwm.setPWM(0, 0, pwmValue);
 
-    // 어두워지기 (700mA 제한값 -> 0)
-    for (int brightness = MAX_PWM_LIMIT; brightness >= 0; brightness -= 50) {
-      pwm.setPWM(ch, 0, brightness);
-      delay(5);
-    }
-    
-    delay(100); // 채널 간 간격
-  }
-}
+  // 시리얼 모니터 출력 (확인용)
+  Serial.print("Target: "); Serial.print(targetPercent);
+  Serial.print("%  |  PWM Value: "); Serial.println(pwmValue);
 
-/**
- * 특정 채널의 밝기를 퍼센트(0~100%)로 제어하고 싶을 때 사용하는 함수
- * @param channel: 0 ~ 15
- * @param percent: 0 ~ 100
- */
-void setLedBrightness(uint8_t channel, int percent) {
-  if (percent > 100) percent = 100;
-  if (percent < 0) percent = 0;
-
-  // 100% 입력 시 MAX_PWM_LIMIT(3150)이 출력되도록 매핑
-  int pwmValue = map(percent, 0, 100, 0, MAX_PWM_LIMIT);
-  pwm.setPWM(channel, 0, pwmValue);
+  delay(1000); // 1초마다 갱신
 }
