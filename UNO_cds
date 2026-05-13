@@ -1,42 +1,90 @@
-// --- 설정 부분 (반드시 있어야 함) ---
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// 0.96인치 OLED 해상도 설정
+#define SCREEN_WIDTH 128 
+#define SCREEN_HEIGHT 64 
+
+// 리셋 핀이 없는 모듈은 -1, 있는 경우 아두이노 핀 번호 입력
+#define OLED_RESET     -1 
+
+// 생성자 선언 (SSD1306 모델용)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 void setup() {
-  Serial.begin(9600); // 시리얼 모니터 통신 속도 설정
-  pinMode(A0, INPUT);  // 센서 1 핀 설정
-  pinMode(A1, INPUT);  // 센서 2 핀 설정
+  Serial.begin(9600);
+  delay(1000); // 전원 안정화를 위한 대기
+  Serial.println(F("--- 시스템 시작 ---"));
+
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+
+  // SSD1306_SWITCHCAPVCC = 3.3V 내부 생성 방식
+  // 주소 0x3C로 시도 (실패 시 0x3D로 자동 시도하도록 설계)
+  Serial.println(F("OLED 초기화 시도중..."));
+  
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+    Serial.println(F("0x3C 주소 실패. 0x3D로 재시도..."));
+    if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
+      Serial.println(F("OLED 연결 최종 실패: 배선을 다시 확인하세요!"));
+      // 실패하더라도 루프는 돌게 함 (시리얼 모니터 확인용)
+    }
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("READY...");
+  display.display();
+  delay(1000);
 }
 
-// --- 반복 실행 부분 ---
 void loop() {
-  // --- 시간 계산 ---
+  // 1. 시간 계산
   unsigned long totalSeconds = millis() / 1000;
   int h = (totalSeconds / 3600) % 24;
   int m = (totalSeconds / 60) % 60;
   int s = totalSeconds % 60;
 
-  // --- 시간 포맷팅 (00:00:00sec 형식) ---
-  char timeBuffer[15]; 
-  sprintf(timeBuffer, "%02d:%02d:%02d", h, m, s);
-  
-  // 시간 출력
-  Serial.print(timeBuffer);
-  Serial.print("  |  ");
-
-  // --- 센서 데이터 읽기 ---
+  // 2. 센서 데이터 읽기
   int raw1 = analogRead(A0);
   int per1 = map(raw1, 0, 1023, 0, 100);
   int raw2 = analogRead(A1);
   int per2 = map(raw2, 0, 1023, 0, 100);
 
-  // --- 센서 데이터 출력 ---
-  Serial.print("CDS #1: ");
-  Serial.print(raw1);
-  Serial.print("(");
-  Serial.print(per1);
-  Serial.print("%)  |  CDS #2: ");
-  Serial.print(raw2);
-  Serial.print("(");
-  Serial.print(per2);
-  Serial.println("%)");
+  // 3. 시간 문자열 생성
+  char timeBuffer[16];
+  sprintf(timeBuffer, "%02d:%02d:%02d", h, m, s);
 
-  delay(1000); // 1초 대기
+  // 4. 시리얼 모니터 출력 (화면 안 나올 때 데이터 확인용)
+  Serial.print(timeBuffer);
+  Serial.print(" | S1: "); Serial.print(per1);
+  Serial.print("% | S2: "); Serial.print(per2);
+  Serial.println("%");
+
+  // 5. OLED 출력
+  display.clearDisplay();
+  
+  // 테두리 박스 (화면 작동 확인용)
+  display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+  
+  display.setTextSize(1);
+  display.setCursor(10, 8);
+  display.print("SYSTEM TIME");
+  
+  display.setTextSize(2);
+  display.setCursor(15, 22);
+  display.print(timeBuffer);
+  
+  display.setTextSize(1);
+  display.setCursor(10, 45);
+  display.print("Sensor 1: "); display.print(per1); display.print("%");
+  display.setCursor(10, 54);
+  display.print("Sensor 2: "); display.print(per2); display.print("%");
+
+  display.display(); // 이 명령이 있어야 화면에 그려짐
+
+  delay(1000);
 }
