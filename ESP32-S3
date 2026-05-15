@@ -1,0 +1,90 @@
+#include <Arduino.h>
+
+/**
+ * [시스템 설계 데이터]
+ */
+const int PWM_PINS[16] = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+const int PWM_RES  = 12;         // 12-bit (0 ~ 4095 단계)
+const int MAX_RAW  = 4095;       // 하드웨어 최대 분해능
+const int SAFE_LIMIT_RAW = 3150; // 700mA 제한을 위한 Raw 값 (910mA * 0.77)
+
+// [상태 변수]
+int currentDutyPercent = 0;      
+int currentFreq = 1000;          
+unsigned long lastMonitorTime = 0;
+
+void printTimestamp() {
+    unsigned long ms = millis();
+    int sec = (ms / 1000) % 60;
+    int min = (ms / 60000) % 60;
+    int hor = (ms / 3600000) % 24;
+    char buf[15];
+    sprintf(buf, "[%02d:%02d:%02d] ", hor, min, sec);
+    Serial.print(buf);
+}
+
+/**
+ * 모니터링 정보를 상세하게 풀어서 출력하는 함수
+ */
+void printDetailedStatus(const char* tag) {
+    int rawVal = map(currentDutyPercent, 0, 100, 0, SAFE_LIMIT_RAW);
+    
+    // 물리적 수치 계산
+    float dutyCycleActual = (rawVal / (float)MAX_RAW) * 100.0; // 하드웨어 실제 점유율
+    int estimatedCurrent = map(rawVal, 0, 4095, 0, 910);       // 예상 출력 전류 (mA)
+
+    printTimestamp();
+    Serial.print(tag);
+    Serial.println(" --------------------------------------------");
+    Serial.printf("  - 설정 밝기: %d%% (목표: 700mA)\n", currentDutyPercent);
+    Serial.printf("  - 동작 주파수: %d Hz (주기: %.2f ms)\n", currentFreq, 1000.0 / currentFreq);
+    Serial.printf("  - 하드웨어 Raw값: %d / 4095\n", rawVal);
+    Serial.printf("  - 실제 PWM 점유율: %.1f%%\n", dutyCycleActual);
+    Serial.printf("  - 예상 출력 전류: 약 %d mA\n", estimatedCurrent);
+    Serial.println("  -------------------------------------------------------");
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+    
+    Serial.println("\n=== ESP32-S3 VISION SYSTEM STARTING ===");
+    
+    for (int i = 0; i < 16; i++) {
+        ledcAttachChannel(PWM_PINS[i], currentFreq, PWM_RES, i);
+        ledcWrite(PWM_PINS[i], 0); 
+    }
+}
+
+void loop() {
+    // 1. 입력 처리
+    if (Serial.available() > 0) {
+        int targetDuty = Serial.parseInt();   
+        int targetFreq = Serial.parseInt();   
+
+        if (targetDuty >= 0 && targetDuty <= 100) currentDutyPercent = targetDuty;
+        if (targetFreq > 0) {
+            if (targetFreq > 40000) targetFreq = 40000;
+            currentFreq = targetFreq;
+        }
+
+        int rawPWMValue = map(currentDutyPercent, 0, 100, 0, SAFE_LIMIT_RAW);
+
+        for (int i = 0; i < 16; i++) {
+            ledcAttachChannel(PWM_PINS[i], currentFreq, PWM_RES, i);
+            ledcWrite(PWM_PINS[i], rawPWMValue);
+        }
+
+        Serial.println("\n[!!] 설정 변경 적용됨");
+        printDetailedStatus("SETTING");
+        
+        while(Serial.available() > 0) Serial.read();
+    }
+
+    // 2. 1초 주기 상세 모니터링
+    unsigned long currentTime = millis();
+    if (currentTime - lastMonitorTime >= 1000) {
+        lastMonitorTime = currentTime;
+        printDetailedStatus("MONITOR");
+    }
+}
